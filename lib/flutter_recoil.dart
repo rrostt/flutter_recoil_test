@@ -2,6 +2,22 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:provider/provider.dart';
 
+/*
+
+StateDescriptor
+Atom
+Selector
+StateStore
+
+useModel
+useAction
+
+*/
+
+typedef T GetStateValue<T>(StateDescriptor desc);
+typedef T SelectorEvaluator<T>(GetStateValue get);
+typedef void Action(GetStateValue get);
+
 class StateDescriptor<T> {
   String name;
   T initialValue;
@@ -13,21 +29,19 @@ class Atom<T> extends StateDescriptor<T> {
   Atom(name, initalValue) : super(name, initalValue);
 }
 
-typedef T SelectorEvaluator<T>(GetStateValue get);
-
 class Selector<T> extends StateDescriptor<T> {
   SelectorEvaluator<T> eval;
   Selector(String name, this.eval) : super(name, null);
 }
 
-class EvalResult<T> {
+class _EvalResult<T> {
   T result;
   List<String> dependencies;
-  EvalResult(this.result, this.dependencies);
+  _EvalResult(this.result, this.dependencies);
 }
 
 class StateStore {
-  Map<String, ValueNotifier> states = {};
+  Map<String, dynamic> states = {};
 
   StateStore();
 
@@ -35,12 +49,12 @@ class StateStore {
     return Provider.of<StateStore>(context);
   }
 
-  ValueNotifier getModelValue(StateDescriptor desc) {
+  dynamic getModelValue(StateDescriptor desc) {
     var modelValue;
     if (states.containsKey(desc.name)) {
       modelValue = states[desc.name];
     } else {
-      modelValue = ValueNotifier(desc.initialValue);
+      modelValue = desc.initialValue;
       states[desc.name] = modelValue;
     }
     return modelValue;
@@ -50,11 +64,11 @@ class StateStore {
     if (desc is Selector) {
       return desc.eval(get);
     } else {
-      return getModelValue(desc).value;
+      return getModelValue(desc);
     }
   }
 
-  EvalResult eval(StateDescriptor desc) {
+  _EvalResult eval(StateDescriptor desc) {
     var deps = <String>[];
     var get;
     get = (desc) {
@@ -65,7 +79,7 @@ class StateStore {
       return val;
     };
     var value = get(desc);
-    return EvalResult(value, deps);
+    return _EvalResult(value, deps);
   }
 }
 
@@ -93,14 +107,14 @@ T useModel<T>(StateDescriptor desc) {
 
   useEffect(() {
     enter.value.map((name) => store.states[name]).forEach((element) {
-      element.addListener(reeval);
+      if (element is Listenable) element.addListener(reeval);
     });
     leave.value.map((name) => store.states[name]).forEach((element) {
-      element.removeListener(reeval);
+      if (element is Listenable) element.removeListener(reeval);
     });
     return () {
       deps.value.map((name) => store.states[name]).forEach((element) {
-        element.removeListener(reeval);
+        if (element is Listenable) element.removeListener(reeval);
       });
     };
   }, [enter, leave]);
@@ -118,16 +132,13 @@ T useModel<T>(StateDescriptor desc) {
   return value.value;
 }
 
-typedef T GetStateValue<T>(StateDescriptor desc);
-typedef void Action(GetStateValue get);
-
 VoidCallback useAction(Action action) {
   var context = useContext();
   var store = StateStore.of(context);
 
   var get = (StateDescriptor desc) {
-    var modelValue = store.getModelValue(desc);
-    return modelValue;
+    var value = store.eval(desc).result;
+    return value;
   };
 
   return () => action(get);

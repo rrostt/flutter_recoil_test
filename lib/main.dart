@@ -25,7 +25,7 @@ class MyApp extends StatelessWidget {
 class MyHomePage extends HookWidget {
   @override
   Widget build(BuildContext context) {
-    var counter = useModel(doubleSelector);
+    var counter = useModel(doublePlusOneSelector);
     var inc = useAction(incrementCounter);
     return Scaffold(
       appBar: AppBar(
